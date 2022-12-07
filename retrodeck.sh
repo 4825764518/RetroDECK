@@ -447,6 +447,25 @@ post_update() {
 start_retrodeck() {
     # normal startup
     echo "Starting RetroDECK v$version"
+
+    if [ "$use_squashfs" = true ] ; then
+      # Make sure overlay module is loaded
+      modprobe overlay
+
+      # Make sure old mounts are cleaned up
+      umount -v /var/config/emulationstation/ROMs
+      umount -v /var/config/emulationstation/ROMs-lower
+
+      # Mount squashfs into overlayfs lowerdir
+      mount $squashfs_path /var/config/emulationstation/ROMs-lower
+
+      # Make sure the workdir is empty
+      rm -rfv /var/config/emulationstation/ROMs-work/*
+
+      # Mount an overlayfs, where the original selected rom dir is the upper (writable) dir and the lower read-only dir is a squashfs specified by the user in setup
+      mount -t overlay overlay -o lowerdir=/var/config/emulationstation/ROMs-lower,upperdir=$roms_folder,workdir=/var/config/emulationstation/ROMs
+    fi
+
     emulationstation --home /var/config/emulationstation
 }
 
@@ -561,6 +580,43 @@ finit() {
 
     esac
 
+    # Use squashfs for rom store?
+    squashfs_choice=$(zenity --icon-name=net.retrodeck.retrodeck --info --no-wrap \
+    --window-icon="/app/share/icons/hicolor/scalable/apps/net.retrodeck.retrodeck.svg" --title "RetroDECK" \
+    --ok-label "Cancel" \
+    --extra-button "Yes" \
+    --extra-button "No" \
+    --text="Do you want to enable squashfs support (roms will be mounted as a read-only filesystem)?\nDO NOT ENABLE THIS UNLESS YOU KNOW WHAT IT MEANS!" )
+    echo "Squashfs choice is $squashfs_choice"
+
+    case $squashfs_choice in
+
+    "" ) # Cancel or X button quits
+      echo "Now quitting"
+      kill $$
+    ;;
+
+    "Yes" )
+      echo "Using squashfs"
+
+      if [ ! -z "$squashfs_path" ]
+      then
+        echo "squashfs_path is not set"
+        echo "please re-run retrodeck.sh with squashfs_path set if you want to enable squashfs"
+        kill $$
+      fi
+
+      echo "Squashfs path = $squashfs_path"
+      use_squashfs=true
+    ;;
+
+    "No" )
+      echo "Not using squashfs"
+      use_squashfs=false
+    ;;
+
+    esac
+
     mkdir -pv $roms_folder
 
     # TODO: after the next update of ES-DE this will not be needed
@@ -581,7 +637,13 @@ finit() {
     #zenity --icon-name=net.retrodeck.retrodeck --info --no-wrap --window-icon="/app/share/icons/hicolor/scalable/apps/net.retrodeck.retrodeck.svg" --title "RetroDECK" --text="RetroDECK will now install the needed files.\nPlease wait up to one minute,\nanother message will notify when the process will be finished.\n\nPress OK to continue."
 
     # Initializing ROMs folder - Original in retrodeck home (or SD Card)
-    dir_prep $roms_folder "/var/config/emulationstation/ROMs"
+    if [ "$use_squashfs" = false ] ; then
+      dir_prep $roms_folder "/var/config/emulationstation/ROMs"
+    else
+      # Setup directories needed for squashfs and overlay mount
+      mkdir -v /var/config/emulationstation/ROMs-lower
+      mkdir -v /var/config/emulationstation/ROMs-work
+    fi
 
     mkdir -pv $rdhome/saves
     mkdir -pv $rdhome/states

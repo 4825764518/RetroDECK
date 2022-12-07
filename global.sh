@@ -8,6 +8,7 @@ emuconfigs="/app/retrodeck/emu-configs"                    # folder with all the
 lockfile="/var/config/retrodeck/.lock"                     # where the lockfile is located
 default_sd="/run/media/mmcblk0p1"                          # Steam Deck SD default path
 hard_version="$(cat '/app/retrodeck/version')"             # hardcoded version (in the readonly filesystem)
+squashfs_path="/home/deck/roms.squashfs"
 
 conf_write() {
   # writes the variables in the retrodeck config file
@@ -58,6 +59,11 @@ conf_write() {
   then
     sed -i "s%sdcard=.*%sdcard=$sdcard%" "$rd_conf"
   fi
+
+  if [ ! -z "$use_squashfs" ]
+  then
+    sed -i "s%use_squashfs=.*%use_squashfs=$use_squashfs" "$rd_conf"
+  fi
   echo "DEBUG: New contents:"
   cat "$rd_conf"
   echo ""
@@ -83,6 +89,7 @@ then
   media_folder="$rdhome/downloaded_media"                    # the media folder, where all the scraped data is downloaded into
   themes_folder="$rdhome/themes"                             # the themes folder
   sdcard="$default_sd"                                       # Steam Deck SD default path
+  use_squashfs=false                                         # Whether to mount roms from a squashfs
 
   # Writing the variables for the first time
   echo '#!/bin/bash'                          >> $rd_conf
@@ -94,6 +101,7 @@ then
   echo "media_folder=$media_folder"           >> $rd_conf
   echo "themes_folder=$themes_folder"         >> $rd_conf
   echo "sdcard=$sdcard"                       >> $rd_conf
+  echo "use_squashfs=$use_squashfs"           >> $rd_conf
 
   echo "Setting config file permissions"
   chmod +rwx $rd_conf
